@@ -31,7 +31,7 @@ const firebaseTokens = {};
 const admin = require("firebase-admin");
 const serviceAccount = require("./helpdesk-protech-firebase-adminsdk-fbsvc-82c8f33dff.json");
 
-// Inicializa Firebase con la cuenta de servicio
+
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
 });
@@ -51,7 +51,7 @@ let poolPromise = sql.connect(dbConfig)
 
 // --- Endpoints ---
 
-
+//registrar tokens para notis
 app.post("/web/registrarToken", (req, res) => {
   const { id_tecnico, token } = req.body;
   if (!id_tecnico || !token) {
@@ -59,7 +59,7 @@ app.post("/web/registrarToken", (req, res) => {
   }
 
   firebaseTokens[id_tecnico] = token;
-  console.log(`✅ Token FCM registrado para técnico ${id_tecnico}: ${token}`);
+  console.log(` Token FCM registrado para técnico ${id_tecnico}: ${token}`);
   res.json({ success: true, message: "Token registrado correctamente" });
 });
 
@@ -374,8 +374,8 @@ app.get('/web/ticketsSinAsignar', async (req, res) => {
   }
 });
 
-// Para el archivo TicketsSinAsignar.jsx. Asignar ticket a tecnico y prioridad
-// Para enviar notificaciones FCM
+//Asignar Tickets
+// Y enviar notificaciones
 app.put("/web/asignarTicket", async (req, res) => {
   const { id_ticket, id_tecnico, prioridad } = req.body;
 
@@ -386,14 +386,14 @@ app.put("/web/asignarTicket", async (req, res) => {
   try {
     const pool = await poolPromise;
 
-    // 1️⃣ Actualizamos el ticket en SQL Server
+    
     await pool.request()
       .input("id_ticket", sql.Int, id_ticket)
       .input("id_tecnico", sql.Int, id_tecnico)
       .input("prioridad", sql.VarChar, prioridad)
       .query(`UPDATE tbl_tickets SET id_tecnico = @id_tecnico, prioridad = @prioridad WHERE id_ticket = @id_ticket`);
 
-    // 2️⃣ Obtenemos el token FCM en memoria
+   
     const token = firebaseTokens[id_tecnico];
     if (token) {
       const message = {
@@ -410,17 +410,17 @@ app.put("/web/asignarTicket", async (req, res) => {
         },
       };
 
-      // 3️⃣ Enviamos la notificación
+      
       await admin.messaging().send(message);
-      console.log(`✅ Notificación enviada al técnico ${id_tecnico}`);
+      console.log(`Notificación enviada al técnico ${id_tecnico}`);
     } else {
-      console.warn(`⚠️ No hay token registrado para el técnico ${id_tecnico}`);
+      console.warn(`No hay token registrado para el técnico ${id_tecnico}`);
     }
 
     res.json({ success: true, message: "Ticket asignado correctamente" });
 
   } catch (err) {
-    console.error("❌ Error al asignar ticket:", err);
+    console.error("Error al asignar ticket:", err);
     res.status(500).json({ success: false, message: "Error al asignar ticket" });
   }
 });
