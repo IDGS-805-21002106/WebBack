@@ -23,6 +23,23 @@ const dbConfig = {
   requestTimeout: 30000,
 };
 
+
+const firebaseTokens = {};
+
+
+// --- Firebase Admin SDK ---
+const admin = require("firebase-admin");
+const serviceAccount = require("./helpdesk-protech-firebase-adminsdk.json");
+
+// Inicializa Firebase con la cuenta de servicio
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+
+
+
+
 let poolPromise = sql.connect(dbConfig)
   .then(pool => {
     console.log('Conexión a SQL Server establecida correctamente.');
@@ -33,6 +50,26 @@ let poolPromise = sql.connect(dbConfig)
   });
 
 // --- Endpoints ---
+
+
+app.post("/web/registrarToken", (req, res) => {
+  const { id_tecnico, token } = req.body;
+  if (!id_tecnico || !token) {
+    return res.status(400).json({ success: false, message: "Faltan datos" });
+  }
+
+  firebaseTokens[id_tecnico] = token;
+  console.log(`✅ Token FCM registrado para técnico ${id_tecnico}: ${token}`);
+  res.json({ success: true, message: "Token registrado correctamente" });
+});
+
+
+
+
+
+
+
+
 // Login
 app.post("/web/login", async (req, res) => {
   const { usuario, password } = req.body;
@@ -338,6 +375,7 @@ app.get('/web/ticketsSinAsignar', async (req, res) => {
 });
 
 // Para el archivo TicketsSinAsignar.jsx. Asignar ticket a tecnico y prioridad
+// Para enviar notificaciones FCM
 app.put("/web/asignarTicket", async (req, res) => {
   const { id_ticket, id_tecnico, prioridad } = req.body;
 
@@ -347,18 +385,46 @@ app.put("/web/asignarTicket", async (req, res) => {
 
   try {
     const pool = await poolPromise;
-    await pool
-      .request()
+
+    // 1️⃣ Actualizamos el ticket en SQL Server
+    await pool.request()
       .input("id_ticket", sql.Int, id_ticket)
       .input("id_tecnico", sql.Int, id_tecnico)
-      .input("prioridad", sql.VarChar, prioridad)      
+      .input("prioridad", sql.VarChar, prioridad)
       .query(`UPDATE tbl_tickets SET id_tecnico = @id_tecnico, prioridad = @prioridad WHERE id_ticket = @id_ticket`);
+
+    // 2️⃣ Obtenemos el token FCM en memoria
+    const token = firebaseTokens[id_tecnico];
+    if (token) {
+      const message = {
+        token: token,
+        notification: {
+          title: "Nuevo ticket asignado",
+          body: `Se te ha asignado el ticket #${id_ticket} con prioridad ${prioridad}`,
+        },
+        android: {
+          notification: {
+            sound: "default",
+            priority: "high",
+          },
+        },
+      };
+
+      // 3️⃣ Enviamos la notificación
+      await admin.messaging().send(message);
+      console.log(`✅ Notificación enviada al técnico ${id_tecnico}`);
+    } else {
+      console.warn(`⚠️ No hay token registrado para el técnico ${id_tecnico}`);
+    }
+
     res.json({ success: true, message: "Ticket asignado correctamente" });
+
   } catch (err) {
-    console.error("Error al asignar ticket:", err);
+    console.error("❌ Error al asignar ticket:", err);
     res.status(500).json({ success: false, message: "Error al asignar ticket" });
   }
 });
+
 
 
 // ---- Roles ----
