@@ -29,7 +29,7 @@ const firebaseTokens = {};
 
 // --- Firebase Admin SDK ---
 const admin = require("firebase-admin");
-const serviceAccount = require("./helpdesk-protech-firebase-adminsdk.json");
+const serviceAccount = require("./helpdesk-protech-firebase-adminsdk-fbsvc-82c8f33dff.json");
 
 // Inicializa Firebase con la cuenta de servicio
 admin.initializeApp({
